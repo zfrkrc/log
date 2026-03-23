@@ -115,7 +115,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      test: ["CMD", "/usr/bin/loki", "-version"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -129,7 +129,7 @@ services:
     container_name: promtail
     depends_on:
       loki:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "514:1514/udp"   # pfSense → host:514 → container:1514
       - "9080:9080"      # Promtail HTTP API / metrics
