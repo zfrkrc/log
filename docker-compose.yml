@@ -7,13 +7,13 @@ services:
   # MongoDB (Graylog metadata)
   # -------------------------
   mongo:
-    image: mongo:4.4 # 5.0+ AVX gerektirir — AVX'siz CPU için 4.4 kullan
+    image: mongo:6.0
     container_name: mongo
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
       interval: 10s
       timeout: 5s
       retries: 5
