@@ -63,9 +63,9 @@ scrape_configs:
             - static_labels:
                 category: suricata
 
-      # HAProxy Load Balancer
+      # HAProxy Load Balancer (nginx adıyla da gelebilir pfSense'de)
       - match:
-          selector: '{service_name=~"haproxy.*"}'
+          selector: '{service_name=~"haproxy.*|nginx"}'
           stages:
             - static_labels:
                 category: haproxy
@@ -119,14 +119,6 @@ scrape_configs:
             - static_labels:
                 category: system
 
-      # --------------------------------------------------
-      # 2. Synology NAS Servisleri
-      # --------------------------------------------------
-      - match:
-          selector: '{service_name=~"nginx|synoproxy|oplogd|confdbsyncd|synoscheduler|synoftp|synosamba.*"}'
-          stages:
-            - static_labels:
-                category: synology
 
       # --------------------------------------------------
       # 3. Configuration Change parse (kullanıcı + IP + modül)
