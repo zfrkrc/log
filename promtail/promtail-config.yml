@@ -25,18 +25,88 @@ scrape_configs:
         job: pfsense
         host: pfsense
     relabel_configs:
-      # Gelen hostname'i label olarak tut
+      # Hostname
       - source_labels: [__syslog_message_hostname]
         target_label: hostname
-      # Facility label
+      # Facility
       - source_labels: [__syslog_message_facility]
         target_label: facility
-      # Severity label
+      # Severity
       - source_labels: [__syslog_message_severity]
         target_label: severity
-      # App/process name (filterlog, php, openvpn vs.)
+      # App / process adı (filterlog, php, suricata, openvpn, vs.)
       - source_labels: [__syslog_message_app_name]
         target_label: app
-      # process id
+      # Process ID
       - source_labels: [__syslog_message_proc_id]
         target_label: proc_id
+
+    pipeline_stages:
+
+      # --------------------------------------------------
+      # 1. pfSense kategori etiketleme
+      #    app label'ına göre category oluştur
+      # --------------------------------------------------
+      - match:
+          selector: '{app=~"suricata.*"}'
+          stages:
+            - static_labels:
+                category: suricata
+
+      - match:
+          selector: '{app="filterlog"}'
+          stages:
+            - static_labels:
+                category: firewall
+
+      - match:
+          selector: '{app=~"php.*"}'
+          stages:
+            - static_labels:
+                category: webgui
+
+      - match:
+          selector: '{app=~"openvpn.*"}'
+          stages:
+            - static_labels:
+                category: vpn
+
+      - match:
+          selector: '{app=~"dhcp.*"}'
+          stages:
+            - static_labels:
+                category: dhcp
+
+      - match:
+          selector: '{app=~"unbound.*"}'
+          stages:
+            - static_labels:
+                category: dns
+
+      # --------------------------------------------------
+      # 2. Suricata — Configuration Change tespiti
+      #    "Configuration Change" içeren loglar için
+      #    değiştiren kullanıcı, IP ve modülü parse et
+      # --------------------------------------------------
+      - match:
+          selector: '{job="pfsense"}'
+          stages:
+            - regex:
+                expression: '(?P<php_module>/[^ ]+\.php):\s+Configuration Change:\s+(?P<cfg_user>[^@]+)@(?P<cfg_ip>[\d\.]+)'
+            - labels:
+                php_module:
+                cfg_user:
+                cfg_ip:
+
+      # --------------------------------------------------
+      # 3. Firewall (filterlog) — blok/geçiş tespiti
+      #    İlk alan: kural no,,,action,direction,...
+      # --------------------------------------------------
+      - match:
+          selector: '{app="filterlog"}'
+          stages:
+            - regex:
+                expression: '^\d+,+(?P<fw_action>pass|block|match|reject),(?P<fw_direction>in|out)'
+            - labels:
+                fw_action:
+                fw_direction:
