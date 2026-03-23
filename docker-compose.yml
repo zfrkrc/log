@@ -9,7 +9,7 @@ services:
   # MongoDB (Graylog metadata)
   # -------------------------
   mongo:
-    image: mongo:6
+    image: mongo:4.4 # 5.0+ AVX gerektirir — AVX'siz CPU için 4.4 kullan
     container_name: mongo
     restart: unless-stopped
     volumes:
@@ -26,6 +26,7 @@ services:
       - plugins.security.disabled=true
       - bootstrap.memory_lock=true
       - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD} # 2.12.0+ zorunlu
     ulimits:
       memlock:
         soft: -1
