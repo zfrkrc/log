@@ -1,0 +1,106 @@
+version: "3.9"
+
+# Tüm hassas değerler .env dosyasından okunur
+# Kurulum: cp .env.example .env → değerleri doldurun → docker compose up -d
+
+services:
+
+  # -------------------------
+  # MongoDB (Graylog metadata)
+  # -------------------------
+  mongo:
+    image: mongo:6
+    container_name: mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  # -------------------------
+  # OpenSearch (log indeksleme motoru)
+  # -------------------------
+  opensearch:
+    image: opensearchproject/opensearch:2.12.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    restart: unless-stopped
+
+  # -------------------------
+  # Graylog (log yönetimi UI + işleme)
+  # -------------------------
+  graylog:
+    image: graylog/graylog:5.2
+    container_name: graylog
+    depends_on:
+      - mongo
+      - opensearch
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=${GRAYLOG_PASSWORD_SECRET}
+      - GRAYLOG_ROOT_PASSWORD_SHA2=${GRAYLOG_ROOT_PASSWORD_SHA2}
+      - GRAYLOG_HTTP_EXTERNAL_URI=http://${SERVER_IP}:9000/
+    ports:
+      - "9000:9000" # Web UI
+      - "1514:1514/udp" # Syslog input (pfSense)
+      - "12201:12201/udp" # GELF input (opsiyonel)
+    restart: unless-stopped
+
+  # -------------------------
+  # Prometheus (metrik toplama)
+  # -------------------------
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  # -------------------------
+  # Node Exporter (sunucu sistem metrikleri)
+  # -------------------------
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host # host PID namespace (doğru metrik için)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+
+  # -------------------------
+  # Grafana (dashboard & görselleştirme)
+  # -------------------------
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+# -------------------------
+# Kalıcı birimler
+# -------------------------
+volumes:
+  mongo_data:
+  opensearch_data:
+  grafana_data:
