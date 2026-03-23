@@ -11,13 +11,13 @@ clients:
 scrape_configs:
 
   # -------------------------------------------------------
-  # pfSense Syslog — UDP 514
+  # pfSense + NAS Syslog — UDP 514
   # pfSense: Status → System Logs → Settings →
-  #   Remote Logging: IP = <bu sunucu IP>, Port = 514, UDP
+  #   Remote Logging: IP = <sunucu-IP>, Port = 514, UDP
   # -------------------------------------------------------
   - job_name: pfsense_syslog
     syslog:
-      listen_address: 0.0.0.0:1514   # container içi port (host'ta 514'e map'lenir)
+      listen_address: 0.0.0.0:1514
       listen_protocol: udp
       idle_timeout: 60s
       label_structured_data: true
@@ -25,63 +25,103 @@ scrape_configs:
         job: pfsense
         host: pfsense
     relabel_configs:
-      # Hostname
       - source_labels: [__syslog_message_hostname]
         target_label: hostname
-      # Facility
       - source_labels: [__syslog_message_facility]
         target_label: facility
-      # Severity
       - source_labels: [__syslog_message_severity]
         target_label: severity
-      # App / process adı (filterlog, php, suricata, openvpn, vs.)
       - source_labels: [__syslog_message_app_name]
         target_label: app
-      # Process ID
       - source_labels: [__syslog_message_proc_id]
         target_label: proc_id
 
     pipeline_stages:
 
       # --------------------------------------------------
-      # 1. pfSense kategori etiketleme (service_name bazlı)
+      # 1. pfSense Servis Kategorileri
       # --------------------------------------------------
-      - match:
-          selector: '{service_name=~"suricata.*"}'
-          stages:
-            - static_labels:
-                category: suricata
 
+      # Firewall — paket filtresi
       - match:
           selector: '{service_name="filterlog"}'
           stages:
             - static_labels:
                 category: firewall
 
+      # pfBlockerNG — DNSBL + Firewall filtre
       - match:
-          selector: '{service_name=~"php.*"}'
+          selector: '{service_name=~"pfb_filter|pfb_dnsbl"}'
           stages:
             - static_labels:
-                category: webgui
+                category: pfblocker
 
+      # Suricata IDS/IPS
       - match:
-          selector: '{service_name=~"openvpn.*"}'
+          selector: '{service_name=~"suricata.*"}'
           stages:
             - static_labels:
-                category: vpn
+                category: suricata
 
+      # HAProxy Load Balancer
       - match:
-          selector: '{service_name=~"dhcp.*"}'
+          selector: '{service_name=~"haproxy.*"}'
           stages:
             - static_labels:
-                category: dhcp
+                category: haproxy
 
+      # DNS — Unbound + pfBlockerNG DNSBL
       - match:
           selector: '{service_name=~"unbound.*"}'
           stages:
             - static_labels:
                 category: dns
 
+      # DHCP — Kea (modern) veya dhcpd (eski)
+      - match:
+          selector: '{service_name=~"kea-dhcp.*|dhcpd.*"}'
+          stages:
+            - static_labels:
+                category: dhcp
+
+      # Ağ İzleme — dpinger (gateway), bandwidthd
+      - match:
+          selector: '{service_name=~"dpinger|bandwidthd"}'
+          stages:
+            - static_labels:
+                category: monitoring
+
+      # Ağ Servisleri — igmpproxy, ntpd
+      - match:
+          selector: '{service_name=~"igmpproxy|ntpd"}'
+          stages:
+            - static_labels:
+                category: network
+
+      # Web GUI / Admin — php config değişiklikleri
+      - match:
+          selector: '{service_name=~"php.*"}'
+          stages:
+            - static_labels:
+                category: webgui
+
+      # OpenVPN
+      - match:
+          selector: '{service_name=~"openvpn.*"}'
+          stages:
+            - static_labels:
+                category: vpn
+
+      # Sistem — syslogd vb.
+      - match:
+          selector: '{service_name=~"syslogd.*"}'
+          stages:
+            - static_labels:
+                category: system
+
+      # --------------------------------------------------
+      # 2. Synology NAS Servisleri
+      # --------------------------------------------------
       - match:
           selector: '{service_name=~"nginx|synoproxy|oplogd|confdbsyncd|synoscheduler|synoftp|synosamba.*"}'
           stages:
@@ -89,7 +129,7 @@ scrape_configs:
                 category: synology
 
       # --------------------------------------------------
-      # 2. Configuration Change parse (kullanıcı + IP)
+      # 3. Configuration Change parse (kullanıcı + IP + modül)
       # --------------------------------------------------
       - match:
           selector: '{job="pfsense"}'
@@ -102,7 +142,7 @@ scrape_configs:
                 cfg_ip:
 
       # --------------------------------------------------
-      # 3. Firewall (filterlog) — block/pass + direction
+      # 4. Firewall (filterlog) — block/pass, direction
       # --------------------------------------------------
       - match:
           selector: '{service_name="filterlog"}'
