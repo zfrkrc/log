@@ -1,0 +1,42 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+
+  # -------------------------------------------------------
+  # pfSense Syslog — UDP 514
+  # pfSense: Status → System Logs → Settings →
+  #   Remote Logging: IP = <bu sunucu IP>, Port = 514, UDP
+  # -------------------------------------------------------
+  - job_name: pfsense_syslog
+    syslog:
+      listen_address: 0.0.0.0:1514   # container içi port (host'ta 514'e map'lenir)
+      listen_protocol: udp
+      idle_timeout: 60s
+      label_structured_data: true
+      labels:
+        job: pfsense
+        host: pfsense
+    relabel_configs:
+      # Gelen hostname'i label olarak tut
+      - source_labels: [__syslog_message_hostname]
+        target_label: hostname
+      # Facility label
+      - source_labels: [__syslog_message_facility]
+        target_label: facility
+      # Severity label
+      - source_labels: [__syslog_message_severity]
+        target_label: severity
+      # App/process name (filterlog, php, openvpn vs.)
+      - source_labels: [__syslog_message_app_name]
+        target_label: app
+      # process id
+      - source_labels: [__syslog_message_proc_id]
+        target_label: proc_id
