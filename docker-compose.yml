@@ -14,6 +14,12 @@ services:
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # -------------------------
   # OpenSearch (log indeksleme motoru)
@@ -34,16 +40,24 @@ services:
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   # -------------------------
   # Graylog (log yönetimi UI + işleme)
   # -------------------------
   graylog:
-    image: graylog/graylog:5.2
+    image: graylog/graylog:4.3
     container_name: graylog
     depends_on:
-      - mongo
-      - opensearch
+      mongo:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
     environment:
       - GRAYLOG_PASSWORD_SECRET=${GRAYLOG_PASSWORD_SECRET}
       - GRAYLOG_ROOT_PASSWORD_SHA2=${GRAYLOG_ROOT_PASSWORD_SHA2}
