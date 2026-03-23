@@ -44,49 +44,46 @@ scrape_configs:
     pipeline_stages:
 
       # --------------------------------------------------
-      # 1. pfSense kategori etiketleme
-      #    app label'ına göre category oluştur
+      # 1. pfSense kategori etiketleme (service_name bazlı)
       # --------------------------------------------------
       - match:
-          selector: '{app=~"suricata.*"}'
+          selector: '{service_name=~"suricata.*"}'
           stages:
             - static_labels:
                 category: suricata
 
       - match:
-          selector: '{app="filterlog"}'
+          selector: '{service_name="filterlog"}'
           stages:
             - static_labels:
                 category: firewall
 
       - match:
-          selector: '{app=~"php.*"}'
+          selector: '{service_name=~"php.*"}'
           stages:
             - static_labels:
                 category: webgui
 
       - match:
-          selector: '{app=~"openvpn.*"}'
+          selector: '{service_name=~"openvpn.*"}'
           stages:
             - static_labels:
                 category: vpn
 
       - match:
-          selector: '{app=~"dhcp.*"}'
+          selector: '{service_name=~"dhcp.*"}'
           stages:
             - static_labels:
                 category: dhcp
 
       - match:
-          selector: '{app=~"unbound.*"}'
+          selector: '{service_name=~"unbound.*"}'
           stages:
             - static_labels:
                 category: dns
 
       # --------------------------------------------------
-      # 2. Suricata — Configuration Change tespiti
-      #    "Configuration Change" içeren loglar için
-      #    değiştiren kullanıcı, IP ve modülü parse et
+      # 2. Configuration Change parse (kullanıcı + IP)
       # --------------------------------------------------
       - match:
           selector: '{job="pfsense"}'
@@ -99,11 +96,10 @@ scrape_configs:
                 cfg_ip:
 
       # --------------------------------------------------
-      # 3. Firewall (filterlog) — blok/geçiş tespiti
-      #    İlk alan: kural no,,,action,direction,...
+      # 3. Firewall (filterlog) — block/pass + direction
       # --------------------------------------------------
       - match:
-          selector: '{app="filterlog"}'
+          selector: '{service_name="filterlog"}'
           stages:
             - regex:
                 expression: '^\d+,+(?P<fw_action>pass|block|match|reject),(?P<fw_direction>in|out)'
