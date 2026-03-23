@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Tüm hassas değerler .env dosyasından okunur
 # Kurulum: cp .env.example .env → değerleri doldurun → docker compose up -d
 
