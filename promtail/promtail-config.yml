@@ -82,6 +82,12 @@ scrape_configs:
             - static_labels:
                 category: dns
 
+      - match:
+          selector: '{service_name=~"nginx|synoproxy|oplogd|confdbsyncd|synoscheduler|synoftp|synosamba.*"}'
+          stages:
+            - static_labels:
+                category: synology
+
       # --------------------------------------------------
       # 2. Configuration Change parse (kullanıcı + IP)
       # --------------------------------------------------
