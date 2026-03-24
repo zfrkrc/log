@@ -2,8 +2,7 @@ apiVersion: 1
 
 # NOT: Proxmox, InfluxDB'ye doğrudan veri gönderir (Telegraf gerektirmez).
 # Proxmox UI → Datacenter → Metric Server → InfluxDB 2 ayarlarında kullandığın
-# org, bucket ve token değerleri INFLUXDB_ORG / INFLUXDB_BUCKET / INFLUXDB_TOKEN
-# ile eşleşmelidir.
+# org, bucket ve token değerleri aşağıdakilerle eşleşmelidir.
 
 datasources:
   - name: InfluxDB
@@ -16,8 +15,9 @@ datasources:
     editable: true
     jsonData:
       version: Flux            # Dashboard Flux sorgu dili kullanıyor
-      organization: "${INFLUXDB_ORG}"
-      defaultBucket: "${INFLUXDB_BUCKET}"
+      organization: myorg
+      defaultBucket: metrics
       tlsSkipVerify: true
     secureJsonData:
-      token: "${INFLUXDB_TOKEN}"
+      token: "8fK2Lm9QxV4rT7wZp3Yc6A!sD@hJkN5bUeG1"
+
