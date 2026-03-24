@@ -9,12 +9,6 @@ clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-
-  # -------------------------------------------------------
-  # pfSense Syslog — UDP 514
-  # pfSense: Status → System Logs → Settings →
-  #   Remote Logging: Server = <sunucu-IP>, Port = 514, UDP
-  # -------------------------------------------------------
   - job_name: pfsense_syslog
     syslog:
       listen_address: 0.0.0.0:1514
@@ -25,109 +19,83 @@ scrape_configs:
         job: pfsense
         host: pfsense
     relabel_configs:
-      - source_labels: [__syslog_message_hostname]
-        target_label: hostname
-      - source_labels: [__syslog_message_facility]
-        target_label: facility
-      - source_labels: [__syslog_message_severity]
-        target_label: severity
-      # app_name -> 'app' ve 'service_name' olarak iki label (Grafana uyumluluğu)
       - source_labels: [__syslog_message_app_name]
         target_label: app
       - source_labels: [__syslog_message_app_name]
         target_label: service_name
+      - source_labels: [__syslog_message_facility]
+        target_label: facility
+      - source_labels: [__syslog_message_severity]
+        target_label: severity
+      - source_labels: [__syslog_message_hostname]
+        target_label: hostname
       - source_labels: [__syslog_message_proc_id]
         target_label: proc_id
 
     pipeline_stages:
-
-      # --------------------------------------------------
-      # 1. pfSense Servis Kategorileri
-      # --------------------------------------------------
-
-      # Firewall — paket filtresi
+      # 1. Her app için kategori ata
       - match:
           selector: '{app="filterlog"}'
           stages:
             - static_labels:
                 category: firewall
+            - regex:
+                # Format: rule_id,sub_rule,anchor,tracker,interface,reason,action,direction,version,...
+                expression: '^(?P<rule_id>\d*),(?P<sub_rule>[^,]*),(?P<anchor>[^,]*),(?P<tracker>\d*),(?P<interface>[^,]*),(?P<reason>[^,]*),(?P<fw_action>pass|block|match|reject),(?P<fw_direction>in|out),(?P<fw_ipver>[46]),'
+            - labels:
+                fw_action:
+                fw_direction:
+                fw_reason:
+                fw_ipver:
+                interface:
 
-      # pfBlockerNG — DNSBL + Firewall filtre
       - match:
           selector: '{app=~"pfb_filter|pfb_dnsbl"}'
           stages:
             - static_labels:
                 category: pfblocker
 
-      # Suricata IDS/IPS
       - match:
           selector: '{app=~"suricata.*"}'
           stages:
             - static_labels:
                 category: suricata
 
-      # HAProxy Load Balancer
       - match:
           selector: '{app=~"haproxy.*|nginx"}'
           stages:
             - static_labels:
                 category: haproxy
 
-      # DNS — Unbound + pfBlockerNG DNSBL
       - match:
           selector: '{app=~"unbound.*"}'
           stages:
             - static_labels:
                 category: dns
 
-      # DHCP — Kea (modern) veya dhcpd (eski)
       - match:
           selector: '{app=~"kea-dhcp.*|dhcpd.*"}'
           stages:
             - static_labels:
                 category: dhcp
 
-      # Ağ İzleme — dpinger (gateway), bandwidthd
       - match:
           selector: '{app=~"dpinger|bandwidthd"}'
           stages:
             - static_labels:
                 category: monitoring
 
-      # Ağ Servisleri — igmpproxy, ntpd
       - match:
           selector: '{app=~"igmpproxy|ntpd"}'
           stages:
             - static_labels:
                 category: network
 
-      # Web GUI / Admin — php config değişiklikleri
       - match:
           selector: '{app=~"php.*"}'
           stages:
             - static_labels:
                 category: webgui
-
-      # OpenVPN
-      - match:
-          selector: '{app=~"openvpn.*"}'
-          stages:
-            - static_labels:
-                category: vpn
-
-      # Sistem — syslogd vb.
-      - match:
-          selector: '{app=~"syslogd.*"}'
-          stages:
-            - static_labels:
-                category: system
-
-      # --------------------------------------------------
-      # 2. Configuration Change parse (kullanıcı + IP + modül)
-      # --------------------------------------------------
-      - match:
-          selector: '{job="pfsense"}'
-          stages:
             - regex:
                 expression: '(?P<php_module>/[^ ]+\.php):\s+Configuration Change:\s+(?P<cfg_user>[^@]+)@(?P<cfg_ip>[\d\.]+)'
             - labels:
@@ -135,21 +103,14 @@ scrape_configs:
                 cfg_user:
                 cfg_ip:
 
-      # --------------------------------------------------
-      # 3. Firewall (filterlog) — CSV parse
-      # pfSense filterlog CSV formatı (IPv4):
-      # rule,subrule,anchor,tracker,iface,reason,action,direction,ipver,...
-      # Alanlar: [0]=rule [1]=subrule [2]=anchor [3]=tracker [4]=iface
-      #          [5]=reason [6]=action [7]=direction [8]=ipver ...
-      # --------------------------------------------------
       - match:
-          selector: '{app="filterlog"}'
+          selector: '{app=~"openvpn.*"}'
           stages:
-            # IPv4 filterlog: action pozisyonu 6, direction pozisyonu 7
-            - regex:
-                expression: '^(?:[^,]*,){5}(?P<fw_reason>[^,]*),(?P<fw_action>pass|block|match|reject),(?P<fw_direction>in|out),(?P<fw_ipver>[46]),'
-            - labels:
-                fw_action:
-                fw_direction:
-                fw_reason:
-                fw_ipver:
+            - static_labels:
+                category: vpn
+
+      - match:
+          selector: '{app=~"syslogd.*"}'
+          stages:
+            - static_labels:
+                category: system
