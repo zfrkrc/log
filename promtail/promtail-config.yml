@@ -11,9 +11,9 @@ clients:
 scrape_configs:
 
   # -------------------------------------------------------
-  # pfSense + NAS Syslog — UDP 514
+  # pfSense Syslog — UDP 514
   # pfSense: Status → System Logs → Settings →
-  #   Remote Logging: IP = <sunucu-IP>, Port = 514, UDP
+  #   Remote Logging: Server = <sunucu-IP>, Port = 514, UDP
   # -------------------------------------------------------
   - job_name: pfsense_syslog
     syslog:
@@ -31,8 +31,11 @@ scrape_configs:
         target_label: facility
       - source_labels: [__syslog_message_severity]
         target_label: severity
+      # app_name -> 'app' ve 'service_name' olarak iki label (Grafana uyumluluğu)
       - source_labels: [__syslog_message_app_name]
         target_label: app
+      - source_labels: [__syslog_message_app_name]
+        target_label: service_name
       - source_labels: [__syslog_message_proc_id]
         target_label: proc_id
 
@@ -44,84 +47,83 @@ scrape_configs:
 
       # Firewall — paket filtresi
       - match:
-          selector: '{service_name="filterlog"}'
+          selector: '{app="filterlog"}'
           stages:
             - static_labels:
                 category: firewall
 
       # pfBlockerNG — DNSBL + Firewall filtre
       - match:
-          selector: '{service_name=~"pfb_filter|pfb_dnsbl"}'
+          selector: '{app=~"pfb_filter|pfb_dnsbl"}'
           stages:
             - static_labels:
                 category: pfblocker
 
       # Suricata IDS/IPS
       - match:
-          selector: '{service_name=~"suricata.*"}'
+          selector: '{app=~"suricata.*"}'
           stages:
             - static_labels:
                 category: suricata
 
-      # HAProxy Load Balancer (nginx adıyla da gelebilir pfSense'de)
+      # HAProxy Load Balancer
       - match:
-          selector: '{service_name=~"haproxy.*|nginx"}'
+          selector: '{app=~"haproxy.*|nginx"}'
           stages:
             - static_labels:
                 category: haproxy
 
       # DNS — Unbound + pfBlockerNG DNSBL
       - match:
-          selector: '{service_name=~"unbound.*"}'
+          selector: '{app=~"unbound.*"}'
           stages:
             - static_labels:
                 category: dns
 
       # DHCP — Kea (modern) veya dhcpd (eski)
       - match:
-          selector: '{service_name=~"kea-dhcp.*|dhcpd.*"}'
+          selector: '{app=~"kea-dhcp.*|dhcpd.*"}'
           stages:
             - static_labels:
                 category: dhcp
 
       # Ağ İzleme — dpinger (gateway), bandwidthd
       - match:
-          selector: '{service_name=~"dpinger|bandwidthd"}'
+          selector: '{app=~"dpinger|bandwidthd"}'
           stages:
             - static_labels:
                 category: monitoring
 
       # Ağ Servisleri — igmpproxy, ntpd
       - match:
-          selector: '{service_name=~"igmpproxy|ntpd"}'
+          selector: '{app=~"igmpproxy|ntpd"}'
           stages:
             - static_labels:
                 category: network
 
       # Web GUI / Admin — php config değişiklikleri
       - match:
-          selector: '{service_name=~"php.*"}'
+          selector: '{app=~"php.*"}'
           stages:
             - static_labels:
                 category: webgui
 
       # OpenVPN
       - match:
-          selector: '{service_name=~"openvpn.*"}'
+          selector: '{app=~"openvpn.*"}'
           stages:
             - static_labels:
                 category: vpn
 
       # Sistem — syslogd vb.
       - match:
-          selector: '{service_name=~"syslogd.*"}'
+          selector: '{app=~"syslogd.*"}'
           stages:
             - static_labels:
                 category: system
 
-
       # --------------------------------------------------
-      # 3. Configuration Change parse (kullanıcı + IP + modül)
+      # 2. Configuration Change parse (kullanıcı + IP + modül)
       # --------------------------------------------------
       - match:
           selector: '{job="pfsense"}'
@@ -134,13 +136,20 @@ scrape_configs:
                 cfg_ip:
 
       # --------------------------------------------------
-      # 4. Firewall (filterlog) — block/pass, direction
+      # 3. Firewall (filterlog) — CSV parse
+      # pfSense filterlog CSV formatı (IPv4):
+      # rule,subrule,anchor,tracker,iface,reason,action,direction,ipver,...
+      # Alanlar: [0]=rule [1]=subrule [2]=anchor [3]=tracker [4]=iface
+      #          [5]=reason [6]=action [7]=direction [8]=ipver ...
       # --------------------------------------------------
       - match:
-          selector: '{service_name="filterlog"}'
+          selector: '{app="filterlog"}'
           stages:
+            # IPv4 filterlog: action pozisyonu 6, direction pozisyonu 7
             - regex:
-                expression: '^\d+,+(?P<fw_action>pass|block|match|reject),(?P<fw_direction>in|out)'
+                expression: '^(?:[^,]*,){5}(?P<fw_reason>[^,]*),(?P<fw_action>pass|block|match|reject),(?P<fw_direction>in|out),(?P<fw_ipver>[46]),'
             - labels:
                 fw_action:
                 fw_direction:
+                fw_reason:
+                fw_ipver:
